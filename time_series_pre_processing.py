@@ -29,12 +29,14 @@ def standard_time_series(time_series):
   return std_series, averages, stds
 
 def get_ar_coefitients(time_series, month, ar_order, predict_len):
-  data_matrix = toeplitz(np.zeros(ar_order,), np.concatenate((np.zeros((predict_len,)), time_series[:-predict_len, month])))
-  target = time_series[:, month]
+  std_time_series, averages, std_devs = standard_time_series(time_series)
+  data_matrix = toeplitz(np.zeros(ar_order,), np.concatenate((np.zeros((predict_len,)), std_time_series[:-predict_len, month])))
+  target = std_time_series[:, month]
   #np.dot(np.dot(np.linalg.inv(np.dot(data_matrix, data_matrix.T)), data_matrix), target)
   lst_sol = np.linalg.lstsq(data_matrix.T, target)
-  mse =  np.mean((np.dot(lst_sol[0], data_matrix)-target)**2)
-  return lst_sol[0], mse
+  predicted_series = np.dot(lst_sol[0], data_matrix)*std_devs[month] + averages[month]
+  error =  predicted_series - time_series[:, month]
+  return lst_sol[0], error, predicted_series
 
 def main():
   show_info = False
@@ -44,10 +46,17 @@ def main():
   (time, time_series) = load_time_series("vazao_furnas")
 
   # Standarizing time series/removing montly sazonality
+  ar_order = 12;
+  predict_len = 1;
+  predicted_series = np.zeros(time_series.shape)
+  series_error = np.zeros(time_series.shape)
+  for month in range(0, 11):
+    print "Processing month %d" % month
+    ls_sol, series_error[:, month], predicted_series[:, month] = get_ar_coefitients(time_series, month, ar_order, predict_len)
+
+  print "MSE: %f" % np.mean(series_error[:, month]**2)
+
   std_time_series, averages, std_devs = standard_time_series(time_series)
-  ls_sol, mse = get_ar_coefitients(std_time_series, 1, 7, 1)
-  mse_original_series = mse*std_devs[0]
-  import pdb; pdb.set_trace()
   if(show_info):
     show_series_info(time_series)
     show_series_info(std_time_series)
